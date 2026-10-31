@@ -1,0 +1,61 @@
+{
+	"version": "2.0.0",
+	"tasks": [
+		{
+			"label": "Test learning rules",
+			"type": "shell",
+			"command": "C:\\Users\\U981526\\DevWorks\\node-v25.9.0-win-x64\\node-v25.9.0-win-x64\\node.exe",
+			"args": [
+				"--experimental-strip-types",
+				"--test",
+				"web/src/learning.test.ts"
+			],
+			"isBackground": false,
+			"problemMatcher": [],
+			"group": "test"
+		},
+		{
+			"label": "Test intermediate checkpoints",
+			"type": "shell",
+			"command": "C:\\Users\\U981526\\DevWorks\\node-v25.9.0-win-x64\\node-v25.9.0-win-x64\\node.exe",
+			"args": [
+				"--experimental-strip-types",
+				"--test",
+				"web/src/learning.test.ts"
+			],
+			"isBackground": false,
+			"problemMatcher": [],
+			"group": "test"
+		},
+		{
+			"label": "Typecheck intermediate steps",
+			"type": "shell",
+			"command": "C:\\Users\\U981526\\DevWorks\\node-v25.9.0-win-x64\\node-v25.9.0-win-x64\\node.exe",
+			"args": [
+				"web/node_modules/typescript/bin/tsc",
+				"-b",
+				"web"
+			],
+			"isBackground": false,
+			"problemMatcher": [
+				"$tsc"
+			],
+			"group": "build"
+		},
+		{
+			"label": "Build intermediate-step app",
+			"type": "shell",
+			"command": "C:\\Users\\U981526\\DevWorks\\node-v25.9.0-win-x64\\node-v25.9.0-win-x64\\node.exe",
+			"args": [
+				"web/node_modules/vite/bin/vite.js",
+				"build",
+				"web",
+				"--logLevel",
+				"warn"
+			],
+			"isBackground": false,
+			"problemMatcher": [],
+			"group": "build"
+		}
+	]
+}
