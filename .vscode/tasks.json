@@ -56,6 +56,20 @@
 			"isBackground": false,
 			"problemMatcher": [],
 			"group": "build"
+		},
+		{
+			"label": "Install locked dependencies",
+			"type": "shell",
+			"command": "C:\\Users\\U981526\\DevWorks\\node-v25.9.0-win-x64\\node-v25.9.0-win-x64\\node.exe",
+			"args": [
+				"C:\\Users\\U981526\\DevWorks\\node-v25.9.0-win-x64\\node-v25.9.0-win-x64\\node_modules\\npm\\bin\\npm-cli.js",
+				"--prefix",
+				"web",
+				"ci",
+				"--ignore-scripts"
+			],
+			"isBackground": false,
+			"problemMatcher": []
 		}
 	]
 }
