@@ -4,6 +4,7 @@ dist/
 .env.*
 !.env.example
 assets/
+.vscode/
 *.local
 *.tsbuildinfo
 playwright-report/
