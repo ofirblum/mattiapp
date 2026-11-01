@@ -145,16 +145,19 @@ Only the pure decision cases are tested today.
    presence or unconstrained AI as evidence of correct reasoning. Geometry
    checks need actual parameters and correspondence, not only point labels.
 
-The current bank contains twelve assessment-level practice items and twelve
-retained short probes. Daily selection uses only the assessment items: compound
+The bank retains the original assessment-level items and short probes and now
+adds fourteen targeted sign-rule variants. Daily selection uses assessment-level items: compound
 fractions/powers, full polynomial expansion and identities, signed substitution,
 coordinate transformations, symbolic trapezium area and complete explanations.
 Each new item names the supporting SB section; none uses a flagged unverified
 printed expression. The old elementary items and their IDs remain intact so
 historical attempts are not silently reinterpreted or deleted.
 
-mathjs performs bounded symbolic polynomial equivalence and a separate
+mathjs performs bounded syntax validation and a separate
 expansion/like-term collection check. Multi-part tasks retain each part's outcome.
+Nerdamer expands the polynomial difference exactly to establish equivalence;
+the earlier mathjs simplifier could leave valid multivariate equalities unresolved.
+MathLive supplies visual fractions and a mathematical keyboard, with local assets.
 KaTeX renders authored mathematical notation. Regression tests cover independently
 computed answers, equivalent forms, wrong signs, incomplete simplification,
 unsafe/unsupported syntax, partial geometry correctness and every typeset item.
@@ -186,6 +189,14 @@ These checks certify only named intermediate values, not the completeness or
 validity of an entire proof. Open working and explanations remain for human
 review. No textbook reviewer has signed off the content. The old prime item
 does not pretend to inspect a constructed point. GeoGebra remains pending.
+
+The first-session refinement adds optional pre-feedback confidence, distinct
+first-expansion evidence, known-sign-error feedback, student-computed numerical
+counterexamples and at most one related transfer question. Developing sign skills
+are prioritized within the existing mixed session, not instead of all curriculum
+topics. H1/H2 correction PDFs now provide actual chapter theory and study guides.
+See [first-session-refinement.md](first-session-refinement.md) for the reviewed
+coverage pages, corrected missing-source status and geometry safeguards.
 
 ## Milestones
 

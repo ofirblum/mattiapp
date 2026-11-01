@@ -248,6 +248,107 @@ test('term groups distinguish powers, accept reordered letter parts and recogniz
   assert.equal(final.independent, false)
   assert.equal(skillEvidence(question.skill, [first, retry, final]).successes, 0)
 })
+test('fraction entry accepts full bounded numerator and denominator expressions', () => {
+  const fraction = bank.find(question => question.id === 'fraction-1')!
+  assert.equal(gradeAnswer(fraction, '(-3*16)/(8*9)').outcome, 'correct')
+  assert.equal(gradeAnswer(fraction, '-(3+1)/(3*2)').outcome, 'correct')
+  const polynomial = bank.find(question => question.id === 'polynomial-distribution-v2')!
+  assert.equal(gradeAnswer(polynomial, '(4ab-14a)/(1+1)').outcome, 'notation')
+  for (const response of ['(1+1)/(3-3)', 'process.exit()', '2^999999', '1'.repeat(300)]) assert.equal(gradeAnswer(fraction, response).outcome, 'review')
+})
+test('geometry fixtures obey the stated transformation and correspondence, not a guessed diagram', async () => {
+  const { geometryIsValid, geometryScenarios } = await import('./geometry.ts')
+  const translation = geometryScenarios['translation-correspondence-v2']
+  const rotation = geometryScenarios['rotation-coordinates-v2']
+  assert.equal(geometryIsValid(translation), true)
+  assert.equal(geometryIsValid(rotation), true)
+  assert.equal(geometryIsValid({ ...translation, images: rotation.images }), false)
+  assert.equal(geometryIsValid({ ...rotation, angle: 90 }), false)
+  assert.equal(geometryIsValid({ ...translation, images: [translation.images[1], translation.images[0], translation.images[2]] }), false)
+  assert.ok(selectItems([]).includes('translation-correspondence-v2'))
+  assert.ok(!selectItems([]).includes('rotation-coordinates-v2'))
+})
+test('sign items have verified objectives, expansions, solutions and targeted known-error feedback', () => {
+  for (const question of bank.filter(question => question.signTraining)) {
+    assert.ok(question.objective && question.source && question.signTraining?.followUpId, question.id)
+    assert.equal(gradeAnswer({ ...question, collected: false }, question.expression).outcome, 'correct', question.id)
+    assert.equal(gradeCheckpoint(question, 'expanded', question.checkpoints![0].answer).outcome, 'correct', question.id)
+    const wrong = question.checkpoints![0].signMistake!.wrongAnswers[0]
+    const feedback = gradeCheckpoint(question, 'expanded', wrong)
+    assert.equal(feedback.category, 'sign', question.id)
+    assert.ok(feedback.feedback.includes('Uitwerking zonder haakjes') && feedback.feedback.includes('Tegenvoorbeeld'), question.id)
+    assert.equal(gradeAnswer(question, question.signTraining!.wrongAnswers[0]).category, 'sign', question.id)
+    assert.ok(bank.some(item => item.id === question.signTraining!.followUpId), question.id)
+  }
+  for (const [id, answer] of [['sign-subtract-a', '3a+3b'], ['sign-subtract-x', '-7x+2y'], ['sign-distribute-a', '-a+8b']]) assert.equal(gradeAnswer(bank.find(question => question.id === id)!, answer).outcome, 'correct')
+})
+test('numerical counterexamples distinguish a negated difference and preserve student verification', async () => {
+  const { verificationPair, makeVerificationEvent, signEvidence } = await import('./learning.ts')
+  const question = bank.find(item => item.id === 'sign-negate-a')!
+  const pair = verificationPair(question, '-a-b')!
+  assert.equal(pair.original, -3)
+  assert.equal(pair.candidate, -7)
+  assert.equal(verificationPair(question, '-a+b'), null)
+  const wrong = makeEvent(session, question, [], 'answer', '-a-b', '', new Date(), undefined, 'sure')
+  const verified = makeVerificationEvent(session, question, [wrong], pair, '-3', '-7')
+  assert.equal(verified.grade?.outcome, 'correct')
+  const corrected = makeEvent(session, question, [wrong, verified], 'answer', '-a+b')
+  assert.equal(corrected.independent, false)
+  assert.equal(signEvidence([wrong, verified, corrected]).highConfidenceErrors, 1)
+  assert.equal(signEvidence([wrong, verified, corrected]).correct, 0)
+  assert.equal(signEvidence([wrong, verified, corrected]).verificationChecks, 1)
+})
+test('related sign follow-ups are fresh, bounded and do not remove other curriculum topics', async () => {
+  const { scheduleSignFollowUp } = await import('./learning.ts')
+  const question = bank.find(item => item.id === 'sign-subtract-a')!
+  const initial: Session = { ...session, items: selectItems([], new Date('2026-11-01T15:00:00Z')), cursor: 0 }
+  assert.equal(initial.items[0], question.id)
+  const wrong = makeEvent(initial, question, [], 'checkpoint', '5a-2a-3b', '', new Date(), 'expanded')
+  const next = scheduleSignFollowUp(initial, question, [wrong])
+  assert.equal(next.items[1], 'sign-subtract-x')
+  assert.equal(next.items.length, 7)
+  assert.ok(initial.items.every(id => next.items.includes(id)))
+  assert.equal(scheduleSignFollowUp(next, question, [wrong]).items.length, 7)
+  const fresh = bank.find(item => item.id === next.items[1])!
+  assert.equal(makeEvent(next, fresh, [wrong], 'checkpoint', fresh.checkpoints![0].answer, '', new Date(), 'expanded').independentStep, true)
+})
+test('sign priority progresses only on varied unassisted evidence across dates', async () => {
+  const { signEvidence } = await import('./learning.ts')
+  const ids = ['sign-subtract-a', 'sign-subtract-x', 'sign-negate-a', 'sign-product-a']
+  const events = ids.map((id, index) => { const question = bank.find(item => item.id === id)!; return makeEvent({ ...session, id: `sign-${index}` }, question, [], 'checkpoint', question.checkpoints![0].answer, '', new Date(index < 2 ? '2026-10-30T15:00:00Z' : '2026-10-31T15:00:00Z'), 'expanded') })
+  assert.equal(signEvidence(events).distinctItems, 4)
+  assert.equal(signEvidence(events).distinctDays, 2)
+  const selected = selectItems(events, new Date('2026-11-01T15:00:00Z')).map(id => bank.find(item => item.id === id)!)
+  assert.equal(selected[0].signTraining?.stage, 3)
+  assert.equal(new Set(selected.map(item => item.topic)).size, 4)
+  assert.equal(selectItems([], new Date('2026-11-01T15:00:00Z')).filter(id => bank.find(item => item.id === id)!.signTraining).length, 1)
+})
+test('visual math serialization preserves complete numerator and denominator expressions', async () => {
+  const { convertAsciiMathToLatex, convertLatexToAsciiMath } = await import('mathlive')
+  const latex = String.raw`\frac{-3(2a-b)}{a+b}`
+  const ascii = convertLatexToAsciiMath(latex)
+  const restored = convertAsciiMathToLatex(ascii)
+  assert.ok(restored.includes('frac') && restored.includes('a+b'))
+  const question = bank.find(item => item.id === 'mixed-fractions-v2')!
+  assert.equal(gradeAnswer(question, convertLatexToAsciiMath(String.raw`\frac{11}{4}`)).outcome, 'correct')
+  assert.equal(gradeAnswer(question, convertLatexToAsciiMath(String.raw`\frac{(6+5)}{(2+2)}`)).outcome, 'notation')
+})
+test('undefined inner denominators do not become valid after a later arithmetic operation', () => {
+  const question = { ...bank.find(item => item.kind === 'number')!, answer: '1', answerFormat: undefined }
+  for (const expression of ['(1/0)^0', '1/(1/0)', '(1/(3-3))^0']) assert.equal(gradeAnswer(question, expression).outcome, 'review')
+})
+test('saved-session sign upgrades preserve original work and remain bounded and idempotent', async () => {
+  const { prioritizeSignsInSavedSession } = await import('./learning.ts')
+  const original: Session = { ...session, items: ['mixed-fractions-v2','polynomial-distribution-v2','translation-correspondence-v2','polynomial-fractions-v2','trapezium-symbolic-v2','rotation-language-v2'], cursor: 1 }
+  const upgraded = prioritizeSignsInSavedSession(original, [], new Date('2026-11-01T15:00:00Z'))
+  assert.equal(upgraded.items.length, 7)
+  assert.equal(upgraded.items[0], original.items[0])
+  assert.equal(upgraded.items[1], 'sign-subtract-a')
+  assert.ok(original.items.every(id => upgraded.items.includes(id)))
+  assert.deepEqual(prioritizeSignsInSavedSession(upgraded, []), upgraded)
+  const complete = { ...original, completedAt: '2026-11-01T15:00:00Z' }
+  assert.deepEqual(prioritizeSignsInSavedSession(complete, []), complete)
+})
 test('evening reminders are conditional and use stable deduplication keys', () => {
   const now = new Date('2026-10-27T19:15:00Z')
   assert.ok(reminderPlan(now, false, preferences).some(job => job.channel === 'push'))
