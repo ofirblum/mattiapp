@@ -5,8 +5,8 @@ A mobile-first mathematics practice website for a student and parent.
 **Current status: working local prototype, not a private production service.**
 The Dutch interface has six-question mixed sessions, deterministic structured
 grading, written explanations flagged for human review, hints, retries, saved
-drafts, a parent evidence view, and a reminder simulator. It contains the original
-assessment-level practice items, fourteen targeted sign-rule variants, and twelve retained short diagnostic probes,
+drafts, a parent evidence view, and a reminder simulator. It contains twelve
+assessment-level practice items plus twelve retained short diagnostic probes,
 informed by the supplied analysis packages. Daily sessions use the assessment
 items, not the elementary probes. It does not
 contain the student's historical marks or original schoolwork.
@@ -61,24 +61,6 @@ Vite runs, which succeeded. Normal installation with Node on PATH is preferred.
 
 ## Try the Learning Loop
 
-The current daily mix prioritizes a sign-rule item first. A typical first item is
-`5a-(2a-3b)`. Expand it to `5a-2a+3b`, mark the two a-terms, and enter the
-coefficient `3` and final expression `3a+3b`. Confidence is optional before any
-feedback. A confirmed sign mistake opens a numerical self-check and can insert
-one fresh related item. Saved unfinished sessions gain a sign-priority item
-without losing their original work, with a maximum of seven questions.
-
-Use **Lange breukstreep** beside a mathematical input to create a real numerator
-and denominator, then type or use the mathematical keyboard. Complete expressions,
-negative values, brackets and nested fractions are supported in the editor.
-**Rekenregel met breukstreep** records the same notation in the working area.
-Mathematical entries persist in a structural ASCII form and are restored visually.
-Algebraic denominators can be written, but their equivalence/domain conditions
-remain for review when outside the bounded grader. The editor does not silently
-convert an unsupported expression into a wrong answer.
-
-The original exercise types remain in the mixed session:
-
 1. Choose **Leerling**, then **Start je sessie**. The first question combines
   fraction division, a negative product and subtraction. Under **Tussenstappen**,
   enter the division result and the signed product before combining them.
@@ -97,10 +79,8 @@ The original exercise types remain in the mixed session:
   method, but still requires marking a supplied expanded line before continuing.
   Switching modes preserves both drafts. Corrections after feedback
   remain assisted, not independent successes.
-4. In the translation diagram, A maps to H, B to I and C to G with vector
-  `(4,-3)`. Enter `HIG` in corresponding vertex order. The separate coordinate
-  rotation task is held pending preparation for its quarter-turn coordinate rule.
-  It is not a translation. Then simplify the
+4. Determine the signed rotation angle and four image coordinates: `-90`,
+  `1`, `-5`, `4`, `-3`. Each part is checked separately. Then simplify the
   fractional-coefficient polynomial to `12b-(20/3)a+24`.
 5. Apply the trapezium formula to symbolic lengths: use `(B+b)*h/2` for
   the general formula and `16ac+4bc+16c` for the simplified area. Finally,
@@ -129,9 +109,7 @@ as the current assessment-level daily session.
 - Selection prioritizes unseen items and overdue review. Developing skills have
   a one-day review interval, independent successes three days, and confirmed
   skills seven days. It selects again when a new day's session is created, not
-  after each submitted answer. A confirmed sign mistake can also insert one
-  closely related transfer item into the session, capped at seven questions.
-  Original question IDs and drafts are preserved.
+  after each submitted answer. A saved session keeps its original question list.
 - Independent means the first submitted answer to that item in that session,
   before any group confirmation, step check, hint, solution or earlier answer feedback. Merely writing
   steps does not count as asking for feedback. Every event is appended; original
@@ -143,33 +121,13 @@ as the current assessment-level daily session.
 - Numbers and simple fractions accept decimal commas and equivalent values.
   When a reduced fraction is explicitly requested, an equivalent decimal or
   unreduced fraction is classified as unfinished notation, not wrong arithmetic.
-- Full polynomial answers use **Nerdamer** exact expansion of their difference,
-  after **mathjs** bounded syntax validation, not string equality
+- Full polynomial answers use **mathjs** symbolic equivalence, not string equality
   or a single numeric substitution. Term order, implicit multiplication and
   equivalent coefficients are supported. Expansion/collection completeness is
   checked separately. Input is bounded to simple polynomials with constant
   nonzero denominators and small nonnegative integer powers. Unsupported syntax
   goes to review. Functions, assignments and variable denominators are rejected;
   this is not an unrestricted computer algebra console. No `eval` is used.
-- **MathLive** provides the visual fraction editor and mathematical keyboard.
-  Its fonts are served locally in the development server and Pages build.
-  Numeric expressions and compound constant denominators are supported by the
-  bounded grader; assignments, unsafe syntax, excessive powers and zero
-  denominators are not executed.
-- Sign-rule stages cover bracket subtraction, negated differences, negative
-  coefficient products, signed like terms, fractional coefficients and mixed
-  expressions. Stage 2 requires two correct unassisted first expansions on
-  distinct items; stage 3 requires four on three items across two Brussels dates.
-  The mixed stage has no advance sign-rule warning. Recent recurring errors
-  increase review priority for fourteen days, not permanently. These are
-  provisional selection thresholds, not a mastery certificate.
-- A known wrong sign form gets a specific rule, named step and counterexample;
-  unrecognized wrong results are not confidently diagnosed. Numerical verification
-  compares the original and proposed expression at the same values, lets the
-  student calculate both, and saves that event separately. A successful correction
-  or verification is not an independent success. The parent view distinguishes
-  first-expansion accuracy, recurring errors, high-confidence errors and
-  verification counts. Confidence is optional and frozen before feedback.
 - Formula and transformation tasks store structured answer parts and their
   outcomes separately. Correct vector components are preserved when only the
   order of the image triangle's vertices is wrong. **KaTeX** renders authored
@@ -213,11 +171,7 @@ as the current assessment-level daily session.
 
 ## Source Review
 
-The original ten diagnostic/specification files and the relevant theory,
-study-guide and coverage sections of the newly supplied H1/H2 correction PDFs
-were inspected. Both PDFs include chapter text as well as corrections. See
-[docs/first-session-refinement.md](docs/first-session-refinement.md) for the
-verified page references and geometry review. The master specification takes
+All ten supplied files in `assets` were read. The master specification takes
 precedence over supporting packages, including the longer exam simulations
 proposed in SB5/SB6: those remain outside V1. SB packages guide diagnostics, not
 the complete syllabus. Post-feedback corrections are not baseline mastery.
@@ -225,19 +179,16 @@ Missing primes, labels and vertex order are distinct from geometric concepts;
 SB6 is positive practical evidence, with the half-point deduction unknown.
 
 The exercise bank has source/objective/subtype/difficulty fields. Chapter
-references repeated from SB4 remain indirect unless the specific source pages
-were inspected; the new sign objectives and translation item now have direct
-H1/H2 references. No unseen
+references repeated from SB4 are marked indirect and unverified. No unseen
 textbook pages, official learning objectives, answer keys or original student
 responses are presented as verified curriculum content.
 
 ### Missing Material
 
-- Chapters 1 and 2 including corrections are now supplied in the private PDFs.
-  The complete remaining syllabus/chapter range is still unknown; full curriculum
-  coverage is not certified. The exact title/screenshot of the confusing exercise
-  from the first session was not supplied, so that specific instance cannot yet
-  be conclusively identified. Both built-in coordinate transformations were reviewed.
+- All referenced Delta Nova textbook chapters, their **Studiewijzer** objective
+  pages, and any answer/correction keys. In particular Chapter 2
+  **Transformaties en symmetrie**, referenced by SB4 at printed pages 58-65,
+  is not actually attached here. The other chapter titles/range are unknown.
 - Original marked assessment photographs for SB1-SB6. SB3 specifically references
   `IMG_1975(1).jpeg`, `IMG_1976(1).jpeg`, `IMG_1987.jpeg`, `IMG_1988.jpeg`;
   none is in the workspace.

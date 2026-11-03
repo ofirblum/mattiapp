@@ -1,22 +1,16 @@
 import { parse, rationalize, simplify } from 'mathjs'
 import type { MathNode, OperatorNode, SymbolNode, ConstantNode, ParenthesisNode } from 'mathjs'
-import nerdamer from 'nerdamer'
 import { assessmentBank, checkpointPlans, likeTermPlans } from './assessment-bank.ts'
-import { geometryIsValid, geometryScenarios } from './geometry.ts'
-import type { GeometryScenario } from './geometry.ts'
-import { signBank } from './sign-bank.ts'
 
 export type Topic = 'Getallen' | 'Lettervormen' | 'Transformaties' | 'Toepassen'
 export type Outcome = 'correct' | 'incorrect' | 'notation' | 'review'
 export type ErrorCategory = 'none' | 'sign' | 'calculation' | 'concept' | 'vocabulary' | 'notation' | 'unknown' | 'review'
 export type AnswerField = { key: string; label: string; kind: 'number' | 'polynomial' | 'exact'; answer: string; category?: ErrorCategory; collected?: boolean }
-export type SignMistake = { wrongAnswers: string[]; rule: string; counterexample: string }
-export type SignTraining = SignMistake & { family: string; stage: 1 | 2 | 3; followUpId: string }
-export type Checkpoint = { id: string; label: string; prompt: string; kind: 'number' | 'polynomial' | 'exact' | 'explanation'; answer: string; success: string; correction: string; collected?: boolean; signMistake?: SignMistake }
+export type Checkpoint = { id: string; label: string; prompt: string; kind: 'number' | 'polynomial' | 'exact' | 'explanation'; answer: string; success: string; correction: string; collected?: boolean }
 export type LikeTermPlan = { expression?: string; checkpointIds?: string[]; asList?: boolean; prompt: string }
 export type SignedTerm = { id: string; expression: string; tex: string; key: string }
 export type TermMarking = { source: string; selected: string[]; groups: string[][] }
-export type WorkingDraft = { response: string; working: string; mathLine?: string; confidence?: 'sure' | 'unsure'; verification?: { original: string; proposed: string }; steps?: Record<string, string>; workingMode?: 'guided' | 'own'; markingExpression?: string; termMarking?: TermMarking }
+export type WorkingDraft = { response: string; working: string; steps?: Record<string, string>; workingMode?: 'guided' | 'own'; markingExpression?: string; termMarking?: TermMarking }
 export type Item = {
   id: string
   topic: Topic
@@ -36,9 +30,6 @@ export type Item = {
   requireWorking?: boolean
   checkpoints?: Checkpoint[]
   likeTerms?: LikeTermPlan
-  geometry?: GeometryScenario
-  signTraining?: SignTraining
-  confidencePrompt?: boolean
   collected?: boolean
   answerFormat?: 'reduced-fraction'
   answer: string
@@ -62,8 +53,7 @@ const diagnosticBank: Item[] = [
   { id: 'explanation-2', topic: 'Toepassen', skill: 'algebra.like_terms.explanation', subtype: 'explanation', objective: 'Uitleggen waarom termen gelijksoortig zijn', chapter: null, source: 'SB2 1a; nieuw schrijfvoorbeeld', difficulty: 2, title: 'Leg je redenering uit', prompt: 'Leg in een volledige zin uit waarom 3ab en -5ab gelijksoortige termen zijn, maar 3a en 3ab niet.', expression: '3ab, -5ab, 3a', kind: 'explanation', answer: '3ab en -5ab hebben hetzelfde letterdeel ab; 3a heeft letterdeel a en is daarom niet gelijksoortig met 3ab.', hint: 'Vergelijk de letterdelen, niet de coefficienten.', solution: '3ab en -5ab hebben hetzelfde letterdeel ab. Bij 3a is het letterdeel a, dus die term is niet gelijksoortig met 3ab.', success: '' },
 ]
 
-export const bank: Item[] = [...assessmentBank.map(item => ({ ...item, checkpoints: checkpointPlans[item.id] })), ...signBank, ...diagnosticBank.map(item => ({ ...item, purpose: 'probe' as const }))].map(item => ({ ...item, likeTerms: likeTermPlans[item.id] ?? item.likeTerms, geometry: geometryScenarios[item.id] }))
-export const eligibleForPractice = (item: Item) => !item.geometry || (geometryIsValid(item.geometry) && !item.geometry.holdForTextbook)
+export const bank: Item[] = [...assessmentBank.map(item => ({ ...item, checkpoints: checkpointPlans[item.id] })), ...diagnosticBank.map(item => ({ ...item, purpose: 'probe' as const }))].map(item => ({ ...item, likeTerms: likeTermPlans[item.id] }))
 export const isAssessmentSession = (session: Session) => session.items.every(id => bank.find(item => item.id === id)?.purpose === 'practice')
 
 export type Grade = { outcome: Outcome; category: ErrorCategory; feedback: string; parts?: { key: string; label: string; outcome: Outcome; category: ErrorCategory }[] }
@@ -72,11 +62,7 @@ export type LearningEvent = {
   sessionId: string
   itemId: string
   at: string
-  type: 'answer' | 'hint' | 'solution' | 'checkpoint' | 'grouping' | 'deferred' | 'verification'
-  confidence?: 'sure' | 'unsure'
-  verificationFor?: string
-  independentStep?: boolean
-  signCheck?: Grade
+  type: 'answer' | 'hint' | 'solution' | 'checkpoint' | 'grouping'
   checkpointId?: string
   groupingSource?: string
   response: string
@@ -90,26 +76,10 @@ export const emptyProgress = (): Progress => ({ version: 1, events: [], sessions
 
 function numericValue(raw: string): number | null {
   const normalized = raw.trim().replaceAll(',', '.').replaceAll('\u2212', '-')
-  if (!normalized || normalized.length > 240 || !/^[0-9.+\-*/^()\s]+$/.test(normalized)) return null
-  try {
-    const root = parse(normalized)
-    let count = 0
-    root.traverse(node => {
-      if (++count > 100 || !['ConstantNode', 'ParenthesisNode', 'OperatorNode'].includes(node.type)) throw new Error('Unsupported number')
-      if (node.type === 'OperatorNode') {
-        const operator = node as OperatorNode
-        if (!['+', '-', '*', '/', '^'].includes(operator.op)) throw new Error('Unsupported operator')
-        if (operator.op === '^' && !/^[0-4]$/.test(operator.args[1].toString())) throw new Error('Unsupported power')
-        if (operator.op === '/') {
-          const denominator: unknown = operator.args[1].evaluate()
-          if (typeof denominator !== 'number' || !Number.isFinite(denominator) || denominator === 0) throw new Error('Undefined denominator')
-        }
-      }
-      if (node.type === 'ConstantNode' && Math.abs(Number((node as ConstantNode).value)) > 1e6) throw new Error('Number too large')
-    })
-    const value: unknown = root.evaluate()
-    return typeof value === 'number' && Number.isFinite(value) ? value : null
-  } catch { return null }
+  if (!/^[+-]?(?:\d+(?:\.\d+)?|\.\d+)(?:\s*\/\s*[+-]?(?:\d+(?:\.\d+)?|\.\d+))?$/.test(normalized)) return null
+  const [numerator, denominator = '1'] = normalized.split('/')
+  const value = Number(numerator) / Number(denominator)
+  return Number.isFinite(value) ? value : null
 }
 
 function polynomialNode(raw: string): MathNode {
@@ -127,7 +97,7 @@ function polynomialNode(raw: string): MathNode {
       if (!['+', '-', '*', '/', '^'].includes(operator.op)) throw new Error('Unsupported operator')
       if (operator.op === '^' && !/^[0-4]$/.test(operator.args[1].toString())) throw new Error('Unsupported power')
       if (operator.op === '/') {
-        const denominator = numericValue(operator.args[1].toString())
+        const denominator = numericValue(operator.args[1].toString().replace(/[()]/g, ''))
         if (denominator === null || denominator === 0) throw new Error('Only constant nonzero denominators supported')
       }
     }
@@ -161,7 +131,7 @@ function polynomialGrade(item: Item, response: string): Grade {
   try {
     const actual = polynomialNode(response)
     const expected = polynomialNode(item.answer)
-    const difference = nerdamer(`expand((${actual.toString()})-(${expected.toString()}))`).text()
+    const difference = simplify(rationalize(`(${actual.toString()})-(${expected.toString()})`)).toString()
     if (difference !== '0') return { outcome: 'incorrect', category: 'unknown', feedback: 'Deze uitdrukking is niet gelijkwaardig aan de juiste uitkomst. Controleer de distributies, de getekende coefficienten en of alle termen behouden zijn.' }
     if (item.collected !== false && !isCollected(actual)) return { outcome: 'notation', category: 'notation', feedback: 'Je uitdrukking is wiskundig gelijkwaardig, maar nog niet volledig uitgewerkt en herleid. Werk haakjes uit en neem gelijksoortige termen samen.' }
     return { outcome: 'correct', category: 'none', feedback: item.success }
@@ -185,7 +155,7 @@ export function displayResponse(item: Item, response: string): string {
 }
 
 export function gradeAnswer(item: Item, response: string): Grade {
-  if (item.kind === 'polynomial') return explainSignMistake(item, response, polynomialGrade(item, response), item.signTraining, 'Je herleide einduitdrukking')
+  if (item.kind === 'polynomial') return polynomialGrade(item, response)
   if (item.kind === 'compound') {
     const fields = responseFields(response)
     const parts = item.fields!.map(field => {
@@ -205,7 +175,7 @@ export function gradeAnswer(item: Item, response: string): Grade {
     if (actual === null) return { outcome: 'review', category: 'review', feedback: 'Deze schrijfwijze kan ik niet betrouwbaar beoordelen. Gebruik een getal of een breuk; je oorspronkelijke antwoord blijft bewaard.' }
     if (Math.abs(actual - expected) < 1e-10) {
       if (item.answerFormat === 'reduced-fraction') {
-        const match = response.trim().match(/^\(?([+-]?\d+)\)?\s*\/\s*\(?(\d+)\)?$/)
+        const match = response.trim().match(/^([+-]?\d+)\s*\/\s*(\d+)$/)
         const gcd = (left: number, right: number): number => right ? gcd(right, left % right) : Math.abs(left)
         if (!match || Number(match[2]) === 0 || gcd(Number(match[1]), Number(match[2])) !== 1) return { outcome: 'notation', category: 'notation', feedback: 'De waarde klopt. Geef nu de gevraagde volledig vereenvoudigde breuk, met een positieve noemer.' }
       }
@@ -224,12 +194,7 @@ export function gradeCheckpoint(item: Item, checkpointId: string, response: stri
   const checkpoint = item.checkpoints?.find(step => step.id === checkpointId)
   if (!checkpoint) return { outcome: 'review', category: 'review', feedback: 'Deze tussenstap kan niet betrouwbaar worden gecontroleerd.' }
   const result = gradeAnswer({ ...item, kind: checkpoint.kind, answer: checkpoint.answer, fields: undefined, answerFormat: undefined, collected: checkpoint.collected, success: checkpoint.success }, response)
-  return explainSignMistake(item, response, { ...result, feedback: result.outcome === 'incorrect' ? checkpoint.correction : result.feedback }, checkpoint.signMistake, checkpoint.label)
-}
-
-function explainSignMistake(item: Item, response: string, result: Grade, support: SignMistake | undefined, location: string): Grade {
-  if (result.outcome !== 'incorrect' || !support || !support.wrongAnswers.some(wrong => polynomialGrade({ ...item, answer: wrong, collected: false }, response).outcome === 'correct')) return result
-  return { outcome: 'incorrect', category: 'sign', feedback: `${location}: deze uitdrukking past bij een fout in het verwerken van het teken. ${support.rule} Tegenvoorbeeld: ${support.counterexample} Pas je eigen uitwerking aan en controleer opnieuw.` }
+  return { ...result, feedback: result.outcome === 'incorrect' ? checkpoint.correction : result.feedback }
 }
 
 export function signedTerms(expression: string): SignedTerm[] {
@@ -292,10 +257,9 @@ export function workingText(item: Item, draft: WorkingDraft): string {
   const marking = termMarkingState(item, draft)
   const groups = marking.groups.map((group, index) => `Groep ${index + 1}: ${marking.terms.filter(term => group.includes(term.id)).map(term => term.expression).join('; ')}`).join('\n')
   const grouping = groups ? `Gelijksoortige termen:\n${groups}\n\n` : ''
-  const notes = [draft.working, draft.mathLine].filter(value => value?.trim()).join('\n')
-  if (!item.checkpoints?.length || draft.workingMode === 'own') return `${grouping}${notes}`
+  if (!item.checkpoints?.length || draft.workingMode === 'own') return `${grouping}${draft.working}`
   const steps = item.checkpoints.map(step => `${step.label}: ${draft.steps?.[step.id] ?? ''}`).join('\n')
-  return `${grouping}${steps}${notes ? `\n\nEigen notities:\n${notes}` : ''}`
+  return `${grouping}${steps}${draft.working.trim() ? `\n\nEigen notities:\n${draft.working}` : ''}`
 }
 
 export function missingWorking(item: Item, draft: WorkingDraft): string | null {
@@ -304,57 +268,18 @@ export function missingWorking(item: Item, draft: WorkingDraft): string | null {
     const missing = item.checkpoints.find(step => !draft.steps?.[step.id]?.trim())
     return missing ? missing.id : null
   }
-  return item.requireWorking && !draft.working.trim() && !draft.mathLine?.trim() ? 'working' : null
+  return item.requireWorking && !draft.working.trim() ? 'working' : null
 }
 
-export function makeEvent(session: Session, item: Item, events: LearningEvent[], type: LearningEvent['type'], response = '', working = '', at = new Date(), checkpointId?: string, confidence?: 'sure' | 'unsure'): LearningEvent {
+export function makeEvent(session: Session, item: Item, events: LearningEvent[], type: LearningEvent['type'], response = '', working = '', at = new Date(), checkpointId?: string): LearningEvent {
   const prior = events.filter(event => event.sessionId === session.id && event.itemId === item.id)
-  return { id: crypto.randomUUID(), sessionId: session.id, itemId: item.id, at: at.toISOString(), type, ...(type === 'checkpoint' ? { checkpointId, independentStep: prior.length === 0 } : {}), ...(confidence ? { confidence } : {}), response, working, independent: type === 'answer' && prior.length === 0, grade: type === 'answer' ? gradeAnswer(item, response) : type === 'checkpoint' ? gradeCheckpoint(item, checkpointId ?? '', response) : null }
+  return { id: crypto.randomUUID(), sessionId: session.id, itemId: item.id, at: at.toISOString(), type, ...(type === 'checkpoint' ? { checkpointId } : {}), response, working, independent: type === 'answer' && prior.length === 0, grade: type === 'answer' ? gradeAnswer(item, response) : type === 'checkpoint' ? gradeCheckpoint(item, checkpointId ?? '', response) : null }
 }
 
 export function makeGroupingEvent(session: Session, item: Item, events: LearningEvent[], draft: WorkingDraft, selected: string[]): LearningEvent {
   const state = termMarkingState(item, draft)
   const response = state.terms.filter(term => selected.includes(term.id)).map(term => term.expression).join('; ')
-  const first = !events.some(event => event.sessionId === session.id && event.itemId === item.id)
-  const expansion = draft.workingMode === 'own' ? draft.markingExpression : draft.steps?.expanded
-  return { ...makeEvent(session, item, events, 'grouping', response, workingText(item, draft)), groupingSource: state.source, ...(item.signTraining && expansion ? { signCheck: gradeCheckpoint(item, 'expanded', expansion), independentStep: first, ...(draft.confidence ? { confidence: draft.confidence } : {}) } : {}), grade: gradeTermSelection(state.terms, selected) }
-}
-
-export function signEvidence(events: LearningEvent[], family?: string) {
-  const items = new Set(bank.filter(item => item.signTraining && (!family || item.signTraining.family === family)).map(item => item.id))
-  const relevant = events.filter(event => items.has(event.itemId))
-  const independent = relevant.filter(event => event.independent || (event.independentStep && (event.checkpointId === 'expanded' || event.type === 'grouping')))
-  const seen = new Set<string>()
-  const samples = independent.filter(event => { const key = `${event.sessionId}:${event.itemId}`; if (seen.has(key)) return false; seen.add(key); return true })
-  const correct = samples.filter(event => (event.signCheck ?? event.grade)?.outcome === 'correct')
-  const errors = relevant.filter(event => event.grade?.category === 'sign' || (event.independentStep && event.signCheck?.category === 'sign'))
-  const accuracy = (slice: LearningEvent[]) => ({ total: slice.length, correct: slice.filter(event => (event.signCheck ?? event.grade)?.outcome === 'correct').length })
-  return { samples: samples.length, correct: correct.length, distinctItems: new Set(correct.map(event => event.itemId)).size, errors: errors.length, highConfidenceErrors: errors.filter(event => event.confidence === 'sure').length, verificationChecks: relevant.filter(event => event.type === 'verification').length, distinctDays: new Set(correct.map(event => brusselsDate(new Date(event.at)))).size, recent: accuracy(samples.slice(-6)), previous: accuracy(samples.slice(-12, -6)) }
-}
-
-export function verificationPair(item: Item, proposed: string) {
-  for (const assignments of [{ a: 5, b: 2, x: 5, y: 2 }, { a: 3, b: -2, x: 3, y: -2 }]) {
-    try {
-      const original: unknown = polynomialNode(item.expression).evaluate(assignments)
-      const candidate: unknown = polynomialNode(proposed).evaluate(assignments)
-      if (typeof original === 'number' && typeof candidate === 'number' && Number.isFinite(original) && Number.isFinite(candidate) && Math.abs(original - candidate) > 1e-9) return { assignments, original, candidate, proposed }
-    } catch { return null }
-  }
-  return null
-}
-
-export function makeVerificationEvent(session: Session, item: Item, events: LearningEvent[], pair: NonNullable<ReturnType<typeof verificationPair>>, original: string, proposed: string): LearningEvent {
-  const left = numericValue(original)
-  const right = numericValue(proposed)
-  const correct = left !== null && right !== null && Math.abs(left - pair.original) < 1e-9 && Math.abs(right - pair.candidate) < 1e-9
-  return { ...makeEvent(session, item, events, 'verification', JSON.stringify({ original, proposed }), `Tegenproef voor ${pair.proposed}; a/x=${pair.assignments.a}, b/y=${pair.assignments.b}`), verificationFor: pair.proposed, grade: { outcome: correct ? 'correct' : 'incorrect', category: correct ? 'none' : 'calculation', feedback: correct ? 'Je hebt zelf twee verschillende waarden gevonden. Daarmee is aangetoond dat de voorgestelde uitdrukking niet gelijkwaardig is. Herwerk nu de tekenstap.' : 'Bereken beide uitdrukkingen opnieuw met dezelfde ingevulde waarden. Neem alle haakjes en tekens mee.' } }
-}
-
-export function scheduleSignFollowUp(session: Session, item: Item, events: LearningEvent[]): Session {
-  if (!item.signTraining || session.items.length >= 7 || session.items.includes(item.signTraining.followUpId)) return session
-  const hasSignError = events.some(event => event.sessionId === session.id && event.itemId === item.id && (event.grade?.category === 'sign' || event.signCheck?.category === 'sign'))
-  if (!hasSignError) return session
-  return { ...session, items: [...session.items.slice(0, session.cursor + 1), item.signTraining.followUpId, ...session.items.slice(session.cursor + 1)] }
+  return { ...makeEvent(session, item, events, 'grouping', response, workingText(item, draft)), groupingSource: state.source, grade: gradeTermSelection(state.terms, selected) }
 }
 
 export function skillEvidence(skill: string, events: LearningEvent[]) {
@@ -379,21 +304,11 @@ export function selectItems(events: LearningEvent[], now = new Date()): string[]
     const interval = stable ? 7 : last.independent && last.grade?.outcome === 'correct' ? 3 : 1
     return Math.min(ageDays / interval, 10) * 10 + (last.grade?.outcome === 'incorrect' ? 5 : 0)
   }
-  const practice = bank.filter(item => item.purpose === 'practice' && eligibleForPractice(item))
+  const practice = bank.filter(item => item.purpose === 'practice')
   const ranked = (topic: Topic, written = false) => practice.filter(item => item.topic === topic && (item.kind === 'explanation') === written).sort((left, right) => priority(right) - priority(left))
   const algebra = ranked('Lettervormen')
-  const signItems = practice.filter(item => item.signTraining).filter(item => {
-    const evidence = signEvidence(events, item.signTraining!.family === 'mixed' ? undefined : item.signTraining!.family)
-    const stage = evidence.correct >= 4 && evidence.distinctItems >= 3 && evidence.distinctDays >= 2 ? 3 : evidence.correct >= 2 && evidence.distinctItems >= 2 ? 2 : 1
-    return item.signTraining!.stage <= stage
-  }).sort((left, right) => {
-    const recent = events.filter(event => now.getTime() - new Date(event.at).getTime() < 14 * 86400000)
-    const weight = (item: Item) => priority(item) + Math.min(signEvidence(recent, item.signTraining!.family).errors, 4) * 8 + item.signTraining!.stage * 3
-    return weight(right) - weight(left)
-  })
-  const mixed = algebra.filter(item => !item.signTraining)
   const explanations = practice.filter(item => item.kind === 'explanation').sort((left, right) => priority(right) - priority(left))
-  return [signItems[0], ranked(topics[0])[0], ranked(topics[2])[0], mixed[0], ranked(topics[3])[0], explanations[0]].map(item => item.id)
+  return [ranked(topics[0])[0], algebra[0], ranked(topics[2])[0], algebra[1], ranked(topics[3])[0], explanations[0]].map(item => item.id)
 }
 
 export function brusselsDate(now: Date): string {
@@ -410,11 +325,4 @@ export function reminderPlan(now: Date, completed: boolean, preferences: Reminde
   if (!completed && time >= preferences.phoneTime) candidates.push({ key: `${date}:phone-reminder`, channel: preferences.pushPermission === 'granted' ? 'push' : 'email-fallback', recipient: 'student' })
   if (completed) candidates.push({ key: `${date}:completion`, channel: 'email', recipient: 'parent' })
   return candidates.filter(candidate => !delivered.includes(candidate.key))
-}
-
-export function prioritizeSignsInSavedSession(session: Session, events: LearningEvent[], now = new Date()): Session {
-  if (session.completedAt || session.items.some(id => bank.find(item => item.id === id)?.signTraining) || session.items.length >= 7) return session
-  const firstSign = selectItems(events, now)[0]
-  if (!bank.find(item => item.id === firstSign)?.signTraining) return session
-  return { ...session, items: [...session.items.slice(0, session.cursor), firstSign, ...session.items.slice(session.cursor)] }
 }
